@@ -1,59 +1,54 @@
+# Clean the data by removing unusual values
 import pandas as pd
 from pathlib import Path
-from tableone import TableOne
-from ydata_profiling import ProfileReport
+
+# Define a function to clean the data based on specific rules to remove implausible heart-rate values, low-quality ECG records, days with too few valid ECG recordings, and non-positive HRV values. This will help ensure that the dataset is more accurate and reliable for subsequent analysis and modeling.
+def clean_data(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Clean mock wearable clinical data.
+
+    Cleaning rules:
+    - Remove implausible heart-rate values.
+    - Remove low-quality ECG records.
+    - Remove days with too few valid ECG recordings.
+    - Remove non-positive HRV values.
+    """
+
+    cleaned = df.copy()
+
+    cleaned = cleaned[
+        (cleaned["mean_heart_rate"] >= 35)
+        & (cleaned["mean_heart_rate"] <= 220)
+    ]
+
+    cleaned = cleaned[cleaned["ecg_quality_score"] >= 0.70]
+
+    cleaned = cleaned[cleaned["valid_ecg_recordings"] >= 3]
+
+    cleaned = cleaned[
+        (cleaned["sdnn"] > 0)
+        & (cleaned["rmssd"] > 0)
+    ]
+
+    return cleaned
 
 
-# Define a funtion to clean the data
-input_path = Path("data/raw/mock_wearable_clinical_data.csv")
-df = pd.read_csv(input_path)
+def main() -> None:
+    input_path = Path("data/raw/mock_wearable_clinical_data.csv")
+    output_dir = Path("data/processed")
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-# Ydata profiling report for the raw data before cleaning and preprocessing to understand the data and identify any issues or patterns that may need to be addressed in the cleaning process. 
-profile = ProfileReport(
-    df,
-    title="Mock wearable clinical data profiling report",
-    explorative=True,
-)
+    df = pd.read_csv(input_path)
+    cleaned = clean_data(df)
 
-output_dir = Path("outputs/reports")
-output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / "cleaned_wearable_clinical_data.csv"
+    cleaned.to_csv(output_path, index=False)
 
-profile.to_file(output_dir / "raw_data_profile_report.html")
+    print(f"Original rows: {df.shape[0]}")
+    print(f"Cleaned rows: {cleaned.shape[0]}")
+    print(f"Rows removed: {df.shape[0] - cleaned.shape[0]}")
+    print(f"Cleaned dataset saved to: {output_path}")
 
-# Tableone summary table by deterioration status to compare the characteristics of patients who deteriorated within 14 days and those who did not. This can help identify any differences in demographics, comorbidities, or other factors that may be associated with deterioration. The table will include p-values to assess the statistical significance of any observed differences between the groups, and it will also report the number of missing values for each variable to provide insight into the completeness of the data.
-columns = [
-    "age",
-    "sex",
-    "comorbidity_count",
-    "prior_hospitalisation",
-    "mean_heart_rate",
-    "sdnn",
-    "rmssd",
-    "cough_count",
-    "irregular_rhythm_burden",
-    "ecg_quality_score",
-    "valid_ecg_recordings",
-]
 
-categorical = [
-    "sex",
-    "prior_hospitalisation",
-]
-
-groupby = "deterioration_14d"
-
-table = TableOne(
-    data=df,
-    columns=columns,
-    categorical=categorical,
-    groupby=groupby,
-    pval=True,
-    missing=True,
-)
-
-print(table.tabulate(tablefmt="github"))
-
-output_dir = Path("outputs/tables")
-output_dir.mkdir(parents=True, exist_ok=True)
-
-table.to_csv(output_dir / "tableone_raw_by_deterioration.csv")
+if __name__ == "__main__":
+    main()
